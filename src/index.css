@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap');
+
+@theme {
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-serif: 'DM Serif Display', serif;
+
+  --color-bg: #0B0C0E;
+  --color-surface: #0F1113;
+  --color-surface-elevated: #16181A;
+  --color-border: #27272a; /* zinc-800 */
+  --color-accent: #3b82f6; /* blue-500 */
+  --color-accent-soft: rgba(59, 130, 246, 0.1);
+  --color-success: #22c55e; /* green-500 */
+}
+
+@layer base {
+  body {
+    @apply bg-[#0B0C0E] text-zinc-200 font-sans antialiased overflow-hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-800 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-700;
+  }
+}
+
+.styled-container {
+  @apply h-screen w-full flex flex-col border-8 border-[#1A1C1E] overflow-hidden;
+}

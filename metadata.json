@@ -1,0 +1,6 @@
+{
+  "name": "Moctale Migrator",
+  "description": "Migrate your Letterboxd watch history and ratings to Moctale.in using a local CSV parser and browser console script.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
