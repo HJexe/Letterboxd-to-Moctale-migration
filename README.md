@@ -5,7 +5,7 @@ A standalone, professional-grade bridge tool to migrate your **Letterboxd** watc
 ## ⚡ Instant Access (No Install Required)
 The easiest way to use this tool is to simply open the standalone file in your browser:
 1. Download this repository.
-2. Double-click the **`migrator.html`** file in the root folder.
+2. Double-click the **`public/migrator.html`** file.
 3. It works instantly—no terminal, no Node.js, and no `npm install` required.
 
 ---

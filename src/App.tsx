@@ -16,7 +16,6 @@ import {
   Star,
   Film
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './lib/utils';
 
 /**
@@ -41,7 +40,17 @@ const RATING_BUCKETS = [
   { id: 'go_for_it', label: 'Go for it', color: 'bg-green-500/20 text-green-400', range: [3.5, 4.5], stars: '★★★★' },
   { id: 'timepass', label: 'Timepass', color: 'bg-yellow-500/20 text-yellow-400', range: [2, 3], stars: '★★★' },
   { id: 'skip', label: 'Skip', color: 'bg-red-500/20 text-red-400', range: [0.5, 1.5], stars: '★★' },
-];
+] as const;
+
+const getMoctaleTag = (rating: string) => {
+  if (!rating) return null;
+  const r = parseFloat(rating);
+  if (isNaN(r)) return null;
+  if (r >= 5.0) return RATING_BUCKETS[0];
+  if (r >= 3.5) return RATING_BUCKETS[1];
+  if (r >= 2.0) return RATING_BUCKETS[2];
+  return RATING_BUCKETS[3];
+};
 
 export default function App() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -78,14 +87,14 @@ export default function App() {
     });
   }, []);
 
-  const generateScript = useCallback(() => {
-    const moviesJson = JSON.stringify(movies.map(m => ({ 
-      name: m.name, 
-      year: m.year, 
-      rating: m.rating 
-    })), null, 2);
+    const generateScript = useCallback(() => {
+        const moviesJson = JSON.stringify(movies.map(m => ({ 
+            name: m.name, 
+            year: m.year, 
+            rating: m.rating 
+        })), null, 2).replace(/\$/g, '\\$');
 
-    const script = `(async () => {
+        const script = `(async () => {
     const DELAY = ${options.delay};
     const DO_WATCHED = ${options.markWatched};
     const DO_RATINGS = ${options.importRatings};
@@ -269,7 +278,8 @@ export default function App() {
                   <tr>
                     <th className="p-5 font-bold">Film Name</th>
                     <th className="p-5 font-bold">Year</th>
-                    <th className="p-5 font-bold">Score</th>
+                    <th className="p-5 font-bold">LB Score</th>
+                    <th className="p-5 font-bold">Moctale Tag</th>
                   </tr>
                 </thead>
                 <tbody className="text-[11px] font-mono text-zinc-500">
@@ -282,6 +292,17 @@ export default function App() {
                           <span className={movie.rating ? "text-yellow-500" : "text-zinc-800"}>★</span>
                           <span className={movie.rating ? "text-zinc-300" : "text-zinc-800"}>{movie.rating || 'N/A'}</span>
                         </div>
+                      </td>
+                      <td className="p-5">
+                        {(() => {
+                          const bucket = getMoctaleTag(movie.rating);
+                          if (!bucket) return <span className="text-zinc-800 italic uppercase">No Rating</span>;
+                          return (
+                            <span className={cn("px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter", bucket.color)}>
+                              {bucket.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -350,28 +371,22 @@ export default function App() {
               Generate Migration Payload <ChevronRight className="w-4 h-4" />
             </button>
 
-            <AnimatePresence>
-              {generatedScript && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="relative group mt-2"
-                >
-                  <pre className="bg-black rounded-xl p-5 font-mono text-[10px] text-blue-500 overflow-hidden h-56 border border-zinc-800 leading-relaxed shadow-inner no-scrollbar">
-                    {generatedScript}
-                  </pre>
-                  <div className="absolute bottom-4 right-4">
-                    <button 
-                      onClick={copyToClipboard}
-                      className="bg-zinc-100 text-black px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-tighter hover:bg-white active:scale-95 transition-all shadow-2xl flex items-center gap-2"
-                    >
-                      {isCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      {isCopied ? "Payload Copied" : "Copy to Clipboard"}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {generatedScript && (
+              <div className="relative group mt-2">
+                <pre className="bg-black rounded-xl p-5 font-mono text-[10px] text-blue-500 overflow-hidden h-56 border border-zinc-800 leading-relaxed shadow-inner no-scrollbar">
+                  {generatedScript}
+                </pre>
+                <div className="absolute bottom-4 right-4">
+                  <button 
+                    onClick={copyToClipboard}
+                    className="bg-zinc-100 text-black px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-tighter hover:bg-white active:scale-95 transition-all shadow-2xl flex items-center gap-2"
+                  >
+                    {isCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {isCopied ? "Payload Copied" : "Copy to Clipboard"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-auto flex flex-col gap-4">
