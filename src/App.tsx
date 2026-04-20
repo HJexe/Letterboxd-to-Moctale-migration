@@ -16,7 +16,7 @@ import {
   Star,
   Film
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './lib/utils';
 
 /**
@@ -99,9 +99,9 @@ export default function App() {
     
     for (let i = 0; i < movies.length; i++) {
         const film = movies[i];
-        const progress = \`[\${i + 1}/\${movies.length}]\`;
+        const progress = "[ " + (i + 1) + " / " + movies.length + " ]";
         try {
-            const searchRes = await fetch(\`/api/search?q=\${encodeURIComponent(film.name)}&page=1\`, {
+            const searchRes = await fetch("/api/search?q=" + encodeURIComponent(film.name) + "&page=1", {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             const searchData = await searchRes.json();
@@ -114,7 +114,7 @@ export default function App() {
             } else {
                 const slug = match.slug || match.id;
                 if (DO_WATCHED) {
-                    await fetch(\`/api/activity/content/\${slug}/watched\`, {
+                    await fetch("/api/activity/content/" + slug + "/watched", {
                         method: 'POST',
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     });
@@ -122,7 +122,7 @@ export default function App() {
                 if (DO_RATINGS && film.rating) {
                     const r = parseFloat(film.rating);
                     const tag = r <= 1.5 ? "skip" : r <= 3.0 ? "timepass" : r <= 4.5 ? "go_for_it" : "perfection";
-                    await fetch(\`/api/activity/content/\${slug}/review\`, {
+                    await fetch("/api/activity/content/" + slug + "/review", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         body: JSON.stringify({ tag: tag })
@@ -374,20 +374,30 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          <div className="mt-auto bg-zinc-900/40 rounded-xl p-5 border border-zinc-800/80">
-            <h3 className="text-[11px] font-black text-zinc-300 uppercase mb-4 flex items-center gap-3">
-              <Zap className="w-4 h-4 text-blue-500" /> Operational Guide
-            </h3>
-            <div className="space-y-4">
-              <div className="flex gap-3">
-                <div className="w-5 h-5 bg-zinc-800 rounded-full flex items-center justify-center text-[10px] font-bold text-zinc-500 shrink-0">1</div>
-                <p className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-tight font-medium">Log into <span className="text-zinc-200">Moctale.in</span> in a focused tab.</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-5 h-5 bg-zinc-800 rounded-full flex items-center justify-center text-[10px] font-bold text-zinc-500 shrink-0">2</div>
-                <p className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-tight font-medium">Inject payload into <span className="text-zinc-200">Developer Console</span> (F12).</p>
+          <div className="mt-auto flex flex-col gap-4">
+            <div className="bg-zinc-900/40 rounded-xl p-5 border border-zinc-800/80">
+              <h3 className="text-[11px] font-black text-zinc-300 uppercase mb-4 flex items-center gap-3">
+                <Zap className="w-4 h-4 text-blue-500" /> Operational Guide
+              </h3>
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 bg-zinc-800 rounded-full flex items-center justify-center text-[10px] font-bold text-zinc-500 shrink-0">1</div>
+                  <p className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-tight font-medium">Log into <span className="text-zinc-200">Moctale.in</span> in a focused tab.</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 bg-zinc-800 rounded-full flex items-center justify-center text-[10px] font-bold text-zinc-500 shrink-0">2</div>
+                  <p className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-tight font-medium">Inject payload into <span className="text-zinc-200">Developer Console</span> (F12).</p>
+                </div>
               </div>
             </div>
+            
+            <a 
+              href="/migrator.html" 
+              download="moctale-migrator.html"
+              className="w-full py-3 bg-zinc-900/50 border border-zinc-800 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-all text-center flex items-center justify-center gap-2 group"
+            >
+              <Database className="w-3 h-3 group-hover:text-blue-400 transition-colors" /> Save Offline Version (.html)
+            </a>
           </div>
         </section>
       </main>

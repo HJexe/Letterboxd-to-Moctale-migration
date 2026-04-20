@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moctale Migrator - Standalone</title>
+    <!-- Tailwind 4 Browser CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- React & Babel for Standalone JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PapaParse -->
+    <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style type="text/tailwindcss">
+        @theme {
+            --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+            --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, monospace;
+            --font-serif: 'DM Serif Display', serif;
+
+            --color-bg: #0B0C0E;
+            --color-surface: #0F1113;
+            --color-surface-elevated: #16181A;
+            --color-border: #27272a;
+            --color-accent: #3b82f6;
+            --color-accent-soft: rgba(59, 130, 246, 0.1);
+            --color-success: #22c55e;
+        }
+
+        @layer base {
+            body {
+                @apply bg-[#0B0C0E] text-zinc-200 font-sans antialiased overflow-hidden m-0 p-0;
+            }
+            ::-webkit-scrollbar { width: 4px; height: 4px; }
+            ::-webkit-scrollbar-track { @apply bg-transparent; }
+            ::-webkit-scrollbar-thumb { @apply bg-zinc-800 rounded-full; }
+            ::-webkit-scrollbar-thumb:hover { @apply bg-zinc-700; }
+        }
+
+        .styled-container {
+            @apply h-screen w-full flex flex-col border-8 border-[#1A1C1E] overflow-hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback, useEffect } = React;
+
+        const RATING_BUCKETS = [
+            { id: 'perfection', label: 'Perfection', color: 'bg-blue-500/20 text-blue-400', range: [5, 5], stars: '★★★★★' },
+            { id: 'go_for_it', label: 'Go for it', color: 'bg-green-500/20 text-green-400', range: [3.5, 4.5], stars: '★★★★' },
+            { id: 'timepass', label: 'Timepass', color: 'bg-yellow-500/20 text-yellow-400', range: [2, 3], stars: '★★★' },
+            { id: 'skip', label: 'Skip', color: 'bg-red-500/20 text-red-400', range: [0.5, 1.5], stars: '★★' },
+        ];
+
+        function App() {
+            const [movies, setMovies] = useState([]);
+            const [fileName, setFileName] = useState('');
+            const [activeStep, setActiveStep] = useState(1);
+            const [options, setOptions] = useState({
+                markWatched: true,
+                importRatings: false,
+                delay: 1200,
+            });
+            const [generatedScript, setGeneratedScript] = useState('');
+            const [isCopied, setIsCopied] = useState(false);
+
+            useEffect(() => {
+                lucide.createIcons();
+            }, [activeStep, movies, generatedScript]);
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setFileName(file.name);
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        const parsed = results.data.map((row) => {
+                            const name = row.Name || row.name || row.Title || row.title || '';
+                            const year = row.Year || row.year || '';
+                            const rating = row.Rating || row.rating || '';
+                            return { name, year, rating };
+                        }).filter(m => m.name);
+
+                        setMovies(parsed);
+                        setActiveStep(2);
+                    },
+                });
+            };
+
+            const generateScript = () => {
+                const moviesJson = JSON.stringify(movies, null, 2);
+                const script = `(async () => {
+    const DELAY = ${options.delay};
+    const DO_WATCHED = ${options.markWatched};
+    const DO_RATINGS = ${options.importRatings};
+    const movies = ${moviesJson};
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    
+    console.log("%c🎬 Migration Started", "color: #3b82f6; font-size: 20px; font-weight: bold;");
+
+    for (let i = 0; i < movies.length; i++) {
+        const film = movies[i];
+        const progress = "[ " + (i + 1) + " / " + movies.length + " ]";
+        try {
+            const searchRes = await fetch("/api/search?q=" + encodeURIComponent(film.name) + "&page=1", {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const searchData = await searchRes.json();
+            const resultsList = searchData.results || searchData.data || searchData.movies || [];
+            let match = resultsList.find(r => (r.title || r.name).toLowerCase() === film.name.toLowerCase()) || resultsList[0];
+
+            if (match) {
+                const slug = match.slug || match.id;
+                if (DO_WATCHED) {
+                    await fetch("/api/activity/content/" + slug + "/watched", {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                }
+                if (DO_RATINGS && film.rating) {
+                    const r = parseFloat(film.rating);
+                    const tag = r <= 1.5 ? "skip" : r <= 3.0 ? "timepass" : r <= 4.5 ? "go_for_it" : "perfection";
+                    await fetch("/api/activity/content/" + slug + "/review", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: JSON.stringify({ tag: tag })
+                    });
+                }
+            }
+        } catch (err) {}
+        await wait(DELAY);
+    }
+    console.log("%cMigration Complete!", "color: #22c55e; font-size: 18px;");
+})();`;
+                setGeneratedScript(script);
+                setActiveStep(3);
+            };
+
+            const copyToClipboard = () => {
+                navigator.clipboard.writeText(generatedScript);
+                setIsCopied(true);
+                setTimeout(() => setIsCopied(false), 2000);
+            };
+
+            return (
+                <div className="styled-container">
+                    <header className="flex items-center justify-between px-8 py-5 border-b border-zinc-800 bg-[#0F1113]">
+                        <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 bg-gradient-to-tr from-green-500 to-blue-500 rounded-lg flex items-center justify-center font-bold text-white tracking-tighter italic shadow-lg shadow-blue-500/20">LB</div>
+                            <div>
+                                <h1 className="text-xl font-bold tracking-tight uppercase text-white leading-none">Letterboxd <span className="text-zinc-600 mx-1">→</span> Moctale</h1>
+                                <p className="text-[10px] font-mono text-zinc-500 mt-1 uppercase tracking-widest font-semibold flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                    v2.0 Standalone Mode
+                                </p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 grid grid-cols-12 gap-px bg-zinc-800/50 overflow-hidden">
+                        <section className="col-span-3 bg-[#0B0C0E] p-6 flex flex-col gap-8 border-r border-zinc-800/50">
+                            <div>
+                                <label className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold block mb-5 italic">Step 1: Input Data</label>
+                                <div className="relative group cursor-pointer h-32 border-2 border-dashed border-zinc-800 hover:border-blue-500/50 rounded-xl flex flex-col items-center justify-center bg-[#0F1113] transition-all">
+                                    <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                                    <i data-lucide="database" className="w-6 h-6 text-zinc-700 mb-2"></i>
+                                    <p className="text-[10px] text-zinc-400 font-bold uppercase">{fileName || "Select Export CSV"}</p>
+                                </div>
+                                <div className="mt-6 flex flex-col gap-1">
+                                    <div className="flex justify-between text-[10px] font-mono py-3 border-b border-zinc-900 uppercase">
+                                        <span className="text-zinc-600">Films Parsed</span>
+                                        <span className="text-zinc-200">{movies.length}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-zinc-900/40 rounded-xl p-5 border border-zinc-800/50">
+                                <label className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold block mb-4 italic">Rating Mapping</label>
+                                <div className="space-y-2">
+                                    {RATING_BUCKETS.map(b => (
+                                        <div key={b.id} className="flex items-center justify-between">
+                                            <span className="text-[10px] text-zinc-500 font-mono">{b.stars}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${b.color}`}>{b.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="col-span-5 bg-[#0F1113] flex flex-col overflow-hidden">
+                            <div className="p-6 border-b border-zinc-800 bg-[#121417]">
+                                <label className="text-[10px] uppercase text-zinc-600 font-bold block mb-2 italic">Step 2: Preview</label>
+                                <h2 className="text-sm font-bold text-zinc-300">Matches for ingestion</h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="text-[10px] uppercase text-zinc-600 border-b border-zinc-800/50 sticky top-0 bg-[#0F1113]">
+                                        <tr><th className="p-5">Film</th><th className="p-5">Year</th><th className="p-5">Score</th></tr>
+                                    </thead>
+                                    <tbody className="text-[11px] font-mono text-zinc-500">
+                                        {movies.map((m, i) => (
+                                            <tr key={i} className="border-b border-zinc-800/30">
+                                                <td className="p-5 text-zinc-200 uppercase">{m.name}</td>
+                                                <td className="p-5">{m.year}</td>
+                                                <td className="p-5">{m.rating || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section className="col-span-4 bg-[#0B0C0E] p-6 flex flex-col gap-6 border-l border-zinc-800/50 overflow-y-auto">
+                            <label className="text-[10px] uppercase text-zinc-600 font-bold block mb-5 italic">Step 3: Injector</label>
+                            <button onClick={generateScript} className="w-full py-4 text-xs font-black uppercase bg-zinc-100 text-black rounded-xl hover:bg-white transition-all">Generate Payload</button>
+                            {generatedScript && (
+                                <div className="relative mt-2">
+                                    <pre className="bg-black rounded-xl p-5 font-mono text-[10px] text-blue-500 h-64 overflow-auto border border-zinc-800">{generatedScript}</pre>
+                                    <button onClick={copyToClipboard} className="absolute bottom-4 right-4 bg-zinc-100 text-black px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-tighter">
+                                        {isCopied ? "Copied" : "Copy"}
+                                    </button>
+                                </div>
+                            )}
+                            <div className="bg-zinc-900/40 rounded-xl p-5 border border-zinc-800/80 mt-auto">
+                                <h3 className="text-[11px] font-black text-zinc-300 uppercase mb-4 tracking-widest">Guide</h3>
+                                <p className="text-[10px] text-zinc-500 leading-relaxed uppercase">1. Log into moctale.in. <br/>2. Open Console (F12). <br/>3. Paste & Enter.</p>
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
