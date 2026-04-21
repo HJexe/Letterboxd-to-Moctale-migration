@@ -140,12 +140,17 @@
                 }
                 if (DO_RATINGS && film.rating) {
                     const r = parseFloat(film.rating);
-                    const tag = r <= 1.5 ? "skip" : r <= 3.0 ? "timepass" : r <= 4.5 ? "go_for_it" : "perfection";
-                    await fetch("/api/activity/content/" + slug + "/review", {
+                    // Match the UI preview logic exactly
+                    const tag = r >= 5.0 ? "perfection" : r >= 3.5 ? "go_for_it" : r >= 2.0 ? "timepass" : "skip";
+                    const reviewRes = await fetch("/api/activity/content/" + slug + "/review", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         body: JSON.stringify({ tag: tag })
                     });
+                    // Verify the rating was saved
+                    if (!reviewRes.ok) {
+                        console.warn("⚠️ Failed to save rating for:", film.name, "- Status:", reviewRes.status);
+                    }
                 }
             }
         } catch (err) {}
