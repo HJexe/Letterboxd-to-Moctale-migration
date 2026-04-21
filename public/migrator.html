@@ -116,48 +116,124 @@
     const DO_RATINGS = ${options.importRatings};
     const movies = ${moviesJson};
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    
+    const results = { success: 0, fail: 0, watchedFail: 0, ratingFail: 0, notFound: [] };
+
+    const authHeaders = () => {
+      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        || document.querySelector('meta[name="csrf"]')?.getAttribute('content');
+      return {
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(token ? { 'X-CSRF-TOKEN': token, 'X-CSRF-Token': token } : {}),
+      };
+    };
+
+    const fetchJson = async (url) => {
+      const res = await fetch(url, { credentials: 'include', headers: authHeaders() });
+      if (!res.ok) throw new Error("Search failed: " + res.status + " for " + url);
+      return res.json();
+    };
+
+    const postWithFallbacks = async (urls, body) => {
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              ...authHeaders(),
+              ...(body ? { 'Content-Type': 'application/json' } : {}),
+            },
+            ...(body ? { body: JSON.stringify(body) } : {}),
+          });
+          if (res.ok) return true;
+        } catch (e) {}
+      }
+      return false;
+    };
+
+    const findMatch = (resultsList, film) => {
+      const exact = resultsList.find(r => {
+        const title = (r.title || r.name || '').trim().toLowerCase();
+        const year = String(r.year || r.releaseYear || r.release_date?.slice?.(0, 4) || '').trim();
+        return title === film.name.trim().toLowerCase() && (!film.year || !year || year === String(film.year));
+      });
+      return exact || resultsList[0] || null;
+    };
+
     console.log("%c🎬 Migration Started", "color: #3b82f6; font-size: 20px; font-weight: bold;");
 
     for (let i = 0; i < movies.length; i++) {
-        const film = movies[i];
-        const progress = "[ " + (i + 1) + " / " + movies.length + " ]";
-        try {
-            const searchRes = await fetch("/api/search?q=" + encodeURIComponent(film.name) + "&page=1", {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const searchData = await searchRes.json();
-            const resultsList = searchData.results || searchData.data || searchData.movies || [];
-            let match = resultsList.find(r => (r.title || r.name).toLowerCase() === film.name.toLowerCase()) || resultsList[0];
+      const film = movies[i];
+      const progress = "[ " + (i + 1) + " / " + movies.length + " ]";
 
-            if (match) {
-                const slug = match.slug || match.id;
-                if (DO_WATCHED) {
-                    await fetch("/api/activity/content/" + slug + "/watched", {
-                        method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-                }
-                if (DO_RATINGS && film.rating) {
-                    const r = parseFloat(film.rating);
-                    // Match the UI preview logic exactly
-                    const tag = r >= 5.0 ? "perfection" : r >= 3.5 ? "go_for_it" : r >= 2.0 ? "timepass" : "skip";
-                    const reviewRes = await fetch("/api/activity/content/" + slug + "/review", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                        body: JSON.stringify({ tag: tag })
-                    });
-                    // Verify the rating was saved
-                    if (!reviewRes.ok) {
-                        console.warn("⚠️ Failed to save rating for:", film.name, "- Status:", reviewRes.status);
-                    }
-                }
-            }
-        } catch (err) {}
-        await wait(DELAY);
+      try {
+        const searchData = await fetchJson("/api/search?q=" + encodeURIComponent(film.name) + "&page=1");
+        const resultsList = searchData.results || searchData.data || searchData.movies || [];
+        const match = findMatch(resultsList, film);
+
+        if (!match) {
+          results.notFound.push(film.name);
+          results.fail++;
+          console.warn(progress, "❌ Not found:", film.name);
+          await wait(DELAY);
+          continue;
+        }
+
+        const id = match.slug || match.id || match.contentId;
+        if (!id) {
+          results.notFound.push(film.name);
+          results.fail++;
+          console.warn(progress, "❌ Missing content id for:", film.name);
+          await wait(DELAY);
+          continue;
+        }
+
+        let watchedOk = true;
+        if (DO_WATCHED) {
+          watchedOk = await postWithFallbacks([
+            "/api/activity/content/" + id + "/watched",
+            "/api/activity/content/" + id + "/mark-watched",
+            "/api/activity/content/" + id + "/watch",
+          ]);
+          if (!watchedOk) {
+            results.watchedFail++;
+            console.warn(progress, "⚠️ Watched failed:", film.name);
+          }
+        }
+
+        let ratingOk = true;
+        if (DO_RATINGS && film.rating) {
+          const r = parseFloat(film.rating);
+          const tag = r >= 5.0 ? "perfection" : r >= 3.5 ? "go_for_it" : r >= 2.0 ? "timepass" : "skip";
+
+          ratingOk = await postWithFallbacks([
+            "/api/activity/content/" + id + "/review",
+            "/api/activity/content/" + id + "/rating",
+            "/api/activity/content/" + id + "/rate",
+          ], { tag, rating: tag, value: tag, stars: r });
+
+          if (!ratingOk) {
+            results.ratingFail++;
+            console.warn(progress, "⚠️ Rating failed:", film.name, "(" + film.rating + ")");
+          }
+        }
+
+        if (watchedOk && ratingOk) {
+          results.success++;
+          console.log(progress, "✅", film.name);
+        } else {
+          results.fail++;
+        }
+      } catch (err) {
+        results.fail++;
+        console.warn(progress, "❌ Error:", film.name, err?.message || err);
+      }
+
+      await wait(DELAY);
     }
     console.log("%cMigration Complete!", "color: #22c55e; font-size: 18px;");
-})();`;
+    console.table(results);
+})();
                 setGeneratedScript(script);
                 setActiveStep(3);
             };
